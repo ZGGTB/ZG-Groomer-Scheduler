@@ -21,12 +21,12 @@ app.use((req, res, next) => {
 // Secret key for JWT signing (store securely in production)
 const secretKey = 'your-secret-key';
 
-// Open (or create) the SQLite database file named ZG-Grooming-Scheduler.db
-// Use the HOME environment variable if available (Azure App Service sets this)
-const homeDir = process.env.HOME || __dirname;
-const dbPath = path.join(homeDir, 'ZG-Grooming-Scheduler.db');
+// Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db
+//const path = require('path');
+const dbPath = path.resolve(__dirname, "../data", "ZG-Groomer-Scheduler.db");
 
-//const dbPath = path.resolve(__dirname, 'ZG-Grooming-Scheduler.db');
+
+//const dbPath = path.resolve(__dirname, 'ZG-Groomer-Scheduler.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
