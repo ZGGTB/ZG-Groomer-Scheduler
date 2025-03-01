@@ -1,5 +1,5 @@
 {
-  "name": "zg-grooming-scheduler",
+  "name": "zg-groomer-scheduler",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
