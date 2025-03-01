@@ -22,7 +22,6 @@ app.use((req, res, next) => {
 const secretKey = 'your-secret-key';
 
 // Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db
-//const path = require('path');
 const dbPath = path.resolve(__dirname, "../data", "ZG-Groomer-Scheduler.db");
 
 
