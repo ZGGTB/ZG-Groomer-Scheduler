@@ -1,0 +1,28 @@
+/* src/components/CalendarCustom.css */
+.custom-event-container {
+  padding: 4px;
+  border-radius: 4px;
+  background-color: #e0f7fa;
+}
+
+.custom-event-title {
+  font-weight: bold;
+  font-style: italic;
+  color: #d32f2f;
+  font-size: 1em;
+  font-family: Arial, sans-serif;
+}
+
+.custom-event-date {
+  margin-top: 2px;
+  font-size: 0.8em;
+  color: #424242;
+}
+
+.cell-box {
+  min-height: 100px;
+  text-align: center;
+  border: 1px solid #ccc;
+  padding: 1rem;
+  box-sizing: border-box;
+}

@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "undefined/subscriptions/014689b7-0949-4be8-a1de-6e07cb467626/resourceGroups/appsvc_linux_centralus/providers/Microsoft.Web/sites/ZG-Groomer-Scheduler",
+    "appService.deploySubpath": "."
+}
