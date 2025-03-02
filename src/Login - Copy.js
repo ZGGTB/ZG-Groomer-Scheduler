@@ -5,12 +5,9 @@ const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setErrorMsg('');
-    setLoading(true);
     // Make a POST request to the login endpoint.
     fetch('http://localhost:3001/login', {
       method: 'POST',
@@ -19,24 +16,19 @@ const Login = ({ onLogin }) => {
     })
       .then((res) => {
         if (!res.ok) {
-          // Try to extract error message from the response text
-          return res.text().then((text) => {
-            throw new Error(text || 'Login failed');
-          });
+          throw new Error('Login failed');
         }
         return res.json();
       })
       .then((data) => {
         // Save the token and username in localStorage.
         localStorage.setItem('token', data.token);
-        localStorage.setItem('username', username);
-        setLoading(false);
+        localStorage.setItem('username', username); // Store the username
         onLogin(); // Notify parent component that login succeeded.
       })
       .catch((error) => {
-        console.error("Login error:", error);
-        setErrorMsg(error.message || 'Invalid username or password.');
-        setLoading(false);
+        console.error(error);
+        setErrorMsg('Invalid username or password.');
       });
   };
 
@@ -62,14 +54,8 @@ const Login = ({ onLogin }) => {
           fullWidth
           margin="normal"
         />
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          style={{ marginTop: '20px' }}
-          disabled={loading}
-        >
-          {loading ? "Logging in..." : "Login"}
+        <Button type="submit" variant="contained" color="primary" style={{ marginTop: '20px' }}>
+          Login
         </Button>
       </form>
     </Container>

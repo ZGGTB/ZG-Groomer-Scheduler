@@ -593,11 +593,10 @@ app.post('/login', (req, res) => {
   db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
     if (err) {
       console.error('Error fetching user:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Internal server error. ' + err.message });
     }
     if (!user) {
-      console.log(`User not found for username: ${username}`);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'User not found' });
     }
     const passwordMatches = bcrypt.compareSync(password, user.password);
     if (!passwordMatches) {
