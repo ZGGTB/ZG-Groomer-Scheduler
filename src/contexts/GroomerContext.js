@@ -12,7 +12,7 @@ export const GroomerProvider = ({ children }) => {
       console.warn("No token found; groomers will not be fetched.");
       return;
     }
-    fetch("http://localhost:3001/groomers", {
+    fetch(`${process.env.REACT_APP_API_URL}/groomers`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + token,

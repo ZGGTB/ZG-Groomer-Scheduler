@@ -12,7 +12,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
   useEffect(() => {
     if (token) {
       // Fetch model_groomers data
-      fetch("http://localhost:3001/model-groomers", {
+      fetch(`${process.env.REACT_APP_API_URL}/model-groomers`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {

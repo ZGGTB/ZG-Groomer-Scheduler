@@ -95,7 +95,7 @@ const GroomerManagement = () => {
   // Fetch groomers when token becomes available.
   useEffect(() => {
     if (token) {
-      fetch("http://localhost:3001/groomers", {
+      fetch(`${process.env.REACT_APP_API_URL}/groomers`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {
@@ -154,7 +154,7 @@ const GroomerManagement = () => {
   // Save edited groomer.
   const handleEditSave = () => {
     if (currentGroomer && editName.trim()) {
-      fetch(`http://localhost:3001/groomers/${currentGroomer.id}`, {
+      fetch(`${process.env.REACT_APP_API_URL}/groomers/${currentGroomer.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

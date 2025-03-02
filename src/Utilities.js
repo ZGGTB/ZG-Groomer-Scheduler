@@ -71,7 +71,7 @@ const CreateGroomerNormalScheduleUtility = ({ refreshScheduleData, currentLastDa
       alert("Please select a groomer and a start date.");
       return;
     }
-    fetch("http://localhost:3001/create-groomer-normal-schedule", {
+    fetch(`${process.env.REACT_APP_API_URL}/create-groomer-normal-schedule`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -186,7 +186,7 @@ const DeleteGroomerScheduleUtility = ({ refreshScheduleData }) => {
       return;
     }
     const vansParam = selectedVans.length === 0 ? "ALL" : selectedVans.join(",");
-    fetch("http://localhost:3001/delete-groomer-schedule-preview", {
+    fetch(`${process.env.REACT_APP_API_URL}/delete-groomer-schedule-preview`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -214,7 +214,7 @@ const DeleteGroomerScheduleUtility = ({ refreshScheduleData }) => {
       return;
     }
     const vansParam = selectedVans.length === 0 ? "ALL" : selectedVans.join(",");
-    fetch("http://localhost:3001/delete-groomer-schedule", {
+    fetch(`${process.env.REACT_APP_API_URL}/delete-groomer-schedule`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

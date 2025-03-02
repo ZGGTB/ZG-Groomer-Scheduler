@@ -227,7 +227,7 @@ const CustomGrid = ({
       newGrid[vanIndex][dayIndex].status = editorStatus;
       newGrid[vanIndex][dayIndex].history.push(updateRecord);
       onGridChange(newGrid.flat()); // CHANGED: Pass flattened grid.
-      fetch("http://localhost:3001/cell-history", {
+      fetch(`${process.env.REACT_APP_API_URL}/cell-history`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -256,8 +256,8 @@ const CustomGrid = ({
     const cellData = adjustedGridData[vanIndex][dayIndex];
     if (cellData) {
       const cell_id = `${cellData.van_id}-${cellData.day}`;
-      const token = localStorage.getItem("token");
-      fetch(`http://localhost:3001/cell-history/${cell_id}`, {
+      const toke = localStorage.getItem("token");
+      fetch(`${process.env.REACT_APP_API_URL}/cell-history/${cell_id}`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {

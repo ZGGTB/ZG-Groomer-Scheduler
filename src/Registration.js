@@ -17,7 +17,7 @@ const Registration = ({ onRegisterSuccess }) => {
       return;
     }
 
-    fetch('http://localhost:3001/register', {
+    fetch(`${process.env.REACT_APP_API_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, role }),

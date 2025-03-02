@@ -40,7 +40,7 @@ const GroomerScheduleChangeReport = () => {
       end_date: endDate,
       status: statusFilter,
     }).toString();
-    fetch(`http://localhost:3001/event-history?${params}`, { 
+    fetch(`${process.env.REACT_APP_API_URL}/event-history?${params}`, { 
       headers: { Authorization: "Bearer " + localStorage.getItem("token") } 
     })
       .then((res) => {

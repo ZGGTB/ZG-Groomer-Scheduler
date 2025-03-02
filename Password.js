@@ -13,7 +13,7 @@ const ForgotPassword = () => {
       setErrorMsg('Username is required.');
       return;
     }
-    fetch('http://localhost:3001/forgot', {
+    fetch('${process.env.REACT_APP_API_URL}/forgot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username }),

@@ -9,7 +9,7 @@ export const VanProvider = ({ children }) => {
 
   // Fetch the list of vans from the backend when the component mounts.
   useEffect(() => {
-    fetch("http://localhost:3001/vans", {
+    fetch(`${process.env.REACT_APP_API_URL}/vans`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + token,
@@ -31,7 +31,7 @@ export const VanProvider = ({ children }) => {
   // Add a new van.
   // Since the DB auto-generates the ID, we send only the van name.
   const addVan = (vanData) => {
-    return fetch("http://localhost:3001/vans", {
+    return fetch(`${process.env.REACT_APP_API_URL}/vans`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -57,7 +57,7 @@ export const VanProvider = ({ children }) => {
 
   // Update an existing van.
   const updateVan = (updatedVan) => {
-    return fetch(`http://localhost:3001/vans/${updatedVan.id}`, {
+    return fetch(`${process.env.REACT_APP_API_URL}/vans/${updatedVan.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -85,7 +85,7 @@ export const VanProvider = ({ children }) => {
 
   // Delete a van.
   const deleteVan = (id) => {
-    return fetch(`http://localhost:3001/vans/${id}`, {
+    return fetch(`${process.env.REACT_APP_API_URL}/vans/${id}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",

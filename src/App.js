@@ -34,7 +34,7 @@ function App() {
   }, []);
 
   const fetchScheduleData = (t) => {
-    fetch("http://localhost:3001/schedule", {
+    fetch(`${process.env.REACT_APP_API_URL}/schedule`, {
       headers: { Authorization: "Bearer " + t },
     })
       .then((res) => {
@@ -60,7 +60,7 @@ function App() {
   };
 
   const handleSaveSchedule = (grid) => {
-    fetch("http://localhost:3001/schedule", {
+    fetch(`${process.env.REACT_APP_API_URL}/schedule`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -80,8 +80,7 @@ function App() {
   };
 
   const handleLoginSuccess = (username, password) => {
-    // Your login API call should store the token into localStorage.
-    // Here we assume that after successful login, the token is already stored.
+    // Assume after successful login, the token is stored in localStorage.
     const t = localStorage.getItem("token");
     setToken(t);
     setIsAuthenticated(true);
@@ -99,7 +98,7 @@ function App() {
   };
 
   const handleAddDays = (newEndDate) => {
-    fetch("http://localhost:3001/add-days", {
+    fetch(`${process.env.REACT_APP_API_URL}/add-days`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -207,7 +206,10 @@ function App() {
               {tabValue === 3 && (
                 <Box sx={{ p: 2 }}>
                   <Typography variant="h6">Utilities</Typography>
-                  <Utilities refreshScheduleData={() => fetchScheduleData(token)} currentLastDate={currentLastDate} />
+                  <Utilities
+                    refreshScheduleData={() => fetchScheduleData(token)}
+                    currentLastDate={currentLastDate}
+                  />
                 </Box>
               )}
               {tabValue === 4 && <Reports />}
@@ -216,7 +218,7 @@ function App() {
                   <ModelingGrid
                     onGridChange={(newGrid) => console.log("Modeling grid updated:", newGrid)}
                     onSaveSchedule={(grid) => {
-                      fetch("http://localhost:3001/model-schedule", {
+                      fetch(`${process.env.REACT_APP_API_URL}/model-schedule`, {
                         method: "PUT",
                         headers: {
                           "Content-Type": "application/json",

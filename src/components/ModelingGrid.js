@@ -12,7 +12,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
   useEffect(() => {
     if (token) {
       // Fetch model_groomers data
-      fetch("http://localhost:3001/model-groomers", {
+      fetch(`${process.env.REACT_APP_API_URL}/model-groomers`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {
@@ -26,7 +26,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
         .catch((err) => console.error("Error fetching model groomers:", err.message));
 
       // Fetch model_vans data
-      fetch("http://localhost:3001/model-vans", {
+      fetch(`${process.env.REACT_APP_API_URL}/model-vans`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {
@@ -40,7 +40,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
         .catch((err) => console.error("Error fetching model vans:", err.message));
 
       // Fetch model schedule data
-      fetch("http://localhost:3001/model-schedule", {
+      fetch(`${process.env.REACT_APP_API_URL}/model-schedule`, {
         headers: { Authorization: "Bearer " + token },
       })
         .then((res) => {
@@ -63,7 +63,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
 
   // Save the modeled schedule and then re-fetch to update UI
   const handleSave = () => {
-    fetch("http://localhost:3001/model-schedule", {
+    fetch(`${process.env.REACT_APP_API_URL}/model-schedule`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -78,7 +78,7 @@ const ModelingGrid = ({ onGridChange, onSaveSchedule }) => {
       .then((data) => {
         console.log("Model schedule saved successfully:", data);
         // Re-fetch the model schedule to update the grid state
-        fetch("http://localhost:3001/model-schedule", {
+        fetch(`${process.env.REACT_APP_API_URL}/model-schedule`, {
           headers: { Authorization: "Bearer " + token },
         })
           .then((res) => {
