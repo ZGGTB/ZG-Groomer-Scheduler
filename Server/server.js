@@ -5,6 +5,7 @@ const sqlite3 = require('sqlite3').verbose();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const { format } = require("date-fns");
 
 const app = express();
 const PORT = 3001;
@@ -21,19 +22,14 @@ app.use((req, res, next) => {
 // Secret key for JWT signing (store securely in production)
 const secretKey = 'your-secret-key';
 
-// Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db
+// Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db in a data folder.
 const dbPath = path.resolve(__dirname, "../data", "ZG-Groomer-Scheduler.db");
-
-
-//const dbPath = path.resolve(__dirname, 'ZG-Groomer-Scheduler.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
   } else {
-    console.log('Connected to the SQLite database at',dbPath);
+    console.log('Connected to the SQLite database at', dbPath);
     
-
-
     // Create events table
     db.run(`
       CREATE TABLE IF NOT EXISTS events (
@@ -43,7 +39,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
       )
     `, (err) => { if (err) console.error(err.message); });
     
-    // Create event_history table (if not exists)
+    // Create event_history table
     db.run(`
       CREATE TABLE IF NOT EXISTS event_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +51,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
       )
     `, (err) => { if (err) console.error(err.message); });
     
-    // --- Alter event_history table to add new columns if missing ---
+    // Alter event_history table to add new columns if missing
     db.all("PRAGMA table_info(event_history)", [], (err, columns) => {
       if (err) {
         console.error("Error checking event_history columns:", err.message);
@@ -155,14 +151,13 @@ function authorizeAdmin(req, res, next) {
   }
 }
 
-//ENDPOINTS 
-// Test endpoint
+// TEST ENDPOINT
 app.get('/test', (req, res) => {
   console.log('Test endpoint hit.');
   res.json({ message: 'Test endpoint working' });
 });
 
-// GET /vans – return all vans
+// VAN ENDPOINTS
 app.get('/vans', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM vans", [], (err, rows) => {
     if (err) {
@@ -174,7 +169,6 @@ app.get('/vans', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// POST /vans – add a new van
 app.post('/vans', authenticateToken, authorizeAdmin, (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Van name is required' });
@@ -187,7 +181,6 @@ app.post('/vans', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// PUT /vans/:id – update a van's name
 app.put('/vans/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
@@ -197,14 +190,11 @@ app.put('/vans/:id', authenticateToken, authorizeAdmin, (req, res) => {
       console.error('Error updating van:', err.message);
       return res.status(500).json({ error: err.message });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Van not found' });
-    }
+    if (this.changes === 0) return res.status(404).json({ error: 'Van not found' });
     res.json({ message: "Van updated successfully" });
   });
 });
 
-// DELETE /vans/:id – delete a van
 app.delete('/vans/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM vans WHERE id = ?", [id], function(err) {
@@ -212,14 +202,12 @@ app.delete('/vans/:id', authenticateToken, authorizeAdmin, (req, res) => {
       console.error('Error deleting van:', err.message);
       return res.status(500).json({ error: err.message });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Van not found' });
-    }
+    if (this.changes === 0) return res.status(404).json({ error: 'Van not found' });
     res.json({ message: "Van deleted successfully" });
   });
 });
 
-// GET /groomers – return all groomers (with schedule parsed)
+// GROOMER ENDPOINTS
 app.get('/groomers', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM groomers", [], (err, rows) => {
     if (err) {
@@ -235,33 +223,22 @@ app.get('/groomers', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// PUT /groomers/:id – update a groomer’s name and schedule
 app.put('/groomers/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const { id } = req.params;
   const { name, schedule } = req.body;
-  if (!name || !schedule) {
-    return res.status(400).json({ error: 'Name and schedule are required.' });
-  }
-  // Convert schedule to a JSON string if it's an object.
+  if (!name || !schedule) return res.status(400).json({ error: 'Name and schedule are required.' });
   const scheduleStr = typeof schedule === 'object' ? JSON.stringify(schedule) : schedule;
-  db.run(
-    "UPDATE groomers SET name = ?, schedule = ? WHERE id = ?",
-    [name, scheduleStr, id],
-    function(err) {
-      if (err) {
-        console.error("Error updating groomer:", err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Groomer not found' });
-      }
-      res.json({ message: "Groomer updated successfully" });
+  db.run("UPDATE groomers SET name = ?, schedule = ? WHERE id = ?", [name, scheduleStr, id], function(err) {
+    if (err) {
+      console.error("Error updating groomer:", err.message);
+      return res.status(500).json({ error: err.message });
     }
-  );
+    if (this.changes === 0) return res.status(404).json({ error: 'Groomer not found' });
+    res.json({ message: "Groomer updated successfully" });
+  });
 });
 
-
-// GET /schedule – retrieve all schedule cells as a flat array.
+// SCHEDULE ENDPOINTS
 app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM schedule", [], (err, rows) => {
     if (err) {
@@ -273,14 +250,9 @@ app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-
-// PUT /schedule – persist the schedule grid.
-// Expects a flat array of schedule cell objects with keys: van_id, day, assignment, status.
 app.put('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   const scheduleData = req.body;
-  if (!Array.isArray(scheduleData)) {
-    return res.status(400).json({ error: "Invalid schedule data format. Expected an array." });
-  }
+  if (!Array.isArray(scheduleData)) return res.status(400).json({ error: "Invalid schedule data format. Expected an array." });
   let completed = 0;
   let errorOccurred = false;
   scheduleData.forEach((cell) => {
@@ -295,9 +267,7 @@ app.put('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
         }
         completed++;
         if (completed === scheduleData.length) {
-          if (errorOccurred) {
-            return res.status(500).json({ error: "Error updating schedule." });
-          }
+          if (errorOccurred) return res.status(500).json({ error: "Error updating schedule." });
           res.json({ message: "Schedule updated successfully." });
         }
       }
@@ -305,35 +275,229 @@ app.put('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// PUT /groomers/:id – update a groomer’s name and schedule
-app.put('/groomers/:id', authenticateToken, authorizeAdmin, (req, res) => {
-  const { id } = req.params;
-  const { name, schedule } = req.body;
-  if (!name || !schedule) {
-    return res.status(400).json({ error: 'Name and schedule are required.' });
+// MODELING ENDPOINTS
+app.get('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_schedule", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model schedule:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    console.log("GET /model-schedule returns:", rows);
+    res.json(rows);
+  });
+});
+
+app.put('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  const scheduleData = req.body;
+  if (!Array.isArray(scheduleData)) return res.status(400).json({ error: "Invalid schedule data format. Expected an array." });
+  let completed = 0;
+  let errorOccurred = false;
+  scheduleData.forEach((cell) => {
+    const { van_id, day, assignment, status } = cell;
+    db.run(
+      `INSERT OR REPLACE INTO model_schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+      [van_id, day, assignment, status],
+      (err) => {
+        if (err) {
+          console.error("Error updating model schedule cell:", err.message);
+          errorOccurred = true;
+        }
+        completed++;
+        if (completed === scheduleData.length) {
+          if (errorOccurred) return res.status(500).json({ error: "Error updating model schedule." });
+          res.json({ message: "Model schedule updated successfully." });
+        }
+      }
+    );
+  });
+});
+
+app.get('/model-groomers', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_groomers", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model groomers:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+    console.log("Fetched model-groomers:", rows);
+  });
+});
+
+app.get('/model-vans', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_vans", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model vans:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+    console.log("Fetched model-vans:", rows);
+  });
+});
+
+// CELL HISTORY ENDPOINTS
+app.post('/cell-history', authenticateToken, authorizeAdmin, (req, res) => {
+  const { cell_id, date, action, name, status, note, user, timestamp } = req.body;
+  if (!cell_id || !date || !action || !name || !status || !user) {
+    return res.status(400).json({ error: "Missing required fields. Expected cell_id, date, action, name, status, and user." });
   }
-  // Convert schedule to a JSON string if it's an object.
-  const scheduleStr = typeof schedule === 'object' ? JSON.stringify(schedule) : schedule;
+  const ts = timestamp || new Date().toISOString();
   db.run(
-    "UPDATE groomers SET name = ?, schedule = ? WHERE id = ?",
-    [name, scheduleStr, id],
+    `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [cell_id, action, date, ts, name, status, note || '', user],
     function(err) {
       if (err) {
-        console.error("Error updating groomer:", err.message);
+        console.error("Error inserting cell history:", err.message);
         return res.status(500).json({ error: err.message });
       }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Groomer not found' });
-      }
-      res.json({ message: "Groomer updated successfully" });
+      console.log('Cell-History POST Info:', req.body);
+      res.json({ message: "Cell history recorded successfully", id: this.lastID });
     }
   );
 });
 
-// POST /create-groomer-normal-schedule
-const { format } = require("date-fns");
+app.get('/cell-history/:cell_id', authenticateToken, authorizeAdmin, (req, res) => {
+  const { cell_id } = req.params;
+  db.all(
+    `SELECT * FROM event_history WHERE cell_id = ? ORDER BY timestamp DESC`,
+    [cell_id],
+    (err, rows) => {
+      if (err) {
+        console.error("Error fetching cell history:", err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows);
+    }
+  );
+});
 
-// POST /create-groomer-normal-schedule
+// EVENT HISTORY ENDPOINT
+app.get('/event-history', authenticateToken, (req, res) => {
+  console.log("GET /event-history query:", req.query);
+  const { start_date, end_date, status } = req.query;
+  if (!start_date || !end_date) {
+    return res.status(400).json({ error: "start_date and end_date are required." });
+  }
+  
+  let query = "SELECT * FROM event_history WHERE date BETWEEN ? AND ?";
+  const params = [start_date, end_date];
+  if (status && status !== "All") {
+    query += " AND status = ?";
+    params.push(status);
+  }
+  query += " ORDER BY timestamp DESC";
+  
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error("Error fetching event history:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    console.log("Event history rows:", rows);
+    res.json(rows);
+  });
+});
+
+// USER MANAGEMENT ENDPOINTS
+app.post('/register', (req, res) => {
+  const { id, username, password, role } = req.body;
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: 'username, password, and role are required' });
+  }
+  const salt = bcrypt.genSaltSync(10);
+  const hashedPassword = bcrypt.hashSync(password, salt);
+  db.run(
+    "INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)",
+    [id || Date.now().toString(), username, hashedPassword, role],
+    function (err) {
+      if (err) {
+        console.error('Error registering user:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'User registered successfully' });
+    }
+  );
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username and password are required' });
+  }
+  db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+    if (err) {
+      console.error('Error fetching user:', err.message);
+      return res.status(500).json({ error: 'Internal server error. ' + err.message });
+    }
+    if (!user) {
+      console.log(`User not found for username: ${username}`);
+      return res.status(401).json({ error: 'User not found' });
+    }
+    const passwordMatches = bcrypt.compareSync(password, user.password);
+    if (!passwordMatches) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const payload = { username: user.username, role: user.role };
+    const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
+    res.json({ token });
+  });
+});
+
+app.post('/forgot', (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'username is required' });
+  res.json({ message: `Password reset not implemented yet for user ${username}.` });
+});
+
+// ADD-DAYS ENDPOINT
+app.post('/add-days', authenticateToken, authorizeAdmin, (req, res) => {
+  const { start_date, end_date } = req.body; 
+  if (!start_date || !end_date) {
+    return res.status(400).json({ error: 'start_date and end_date are required.' });
+  }
+  const startDate = new Date(start_date);
+  const endDate = new Date(end_date);
+  if (endDate <= startDate) {
+    return res.status(400).json({ error: 'end_date must be after start_date.' });
+  }
+  const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  db.all("SELECT id FROM vans", [], (err, vans) => {
+    if (err) {
+      console.error("Error fetching vans:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    if (!vans || vans.length === 0) {
+      return res.status(400).json({ error: "No vans found. Please add vans first." });
+    }
+    let recordsInserted = 0;
+    let errors = [];
+    const totalRecords = vans.length * diffDays;
+    vans.forEach(van => {
+      for (let i = 1; i <= diffDays; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        const dayStr = d.toISOString().split("T")[0];
+        db.run(
+          `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+          [van.id, dayStr, "", "Blank"],
+          (err) => {
+            if (err) {
+              errors.push(err.message);
+            }
+            recordsInserted++;
+            if (recordsInserted === totalRecords) {
+              if (errors.length > 0) {
+                res.status(500).json({ error: errors.join(", ") });
+              } else {
+                res.json({ message: "Days added successfully." });
+              }
+            }
+          }
+        );
+      }
+    });
+  });
+});
+
+// CREATE GROOMER NORMAL SCHEDULE ENDPOINT
 app.post(
   "/create-groomer-normal-schedule",
   authenticateToken,
@@ -341,11 +505,8 @@ app.post(
   (req, res) => {
     const { groomer_id, start_date } = req.body;
     if (!groomer_id || !start_date) {
-      return res
-        .status(400)
-        .json({ error: "groomer_id and start_date are required." });
+      return res.status(400).json({ error: "groomer_id and start_date are required." });
     }
-    // Look up the groomer from the groomers table.
     db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -353,7 +514,6 @@ app.post(
       if (!groomer) {
         return res.status(404).json({ error: "Groomer not found." });
       }
-      // Parse the groomer's normal schedule.
       let scheduleObj = {};
       try {
         scheduleObj =
@@ -361,11 +521,8 @@ app.post(
             ? JSON.parse(groomer.schedule)
             : groomer.schedule || {};
       } catch (e) {
-        return res
-          .status(500)
-          .json({ error: "Failed to parse groomer schedule." });
+        return res.status(500).json({ error: "Failed to parse groomer schedule." });
       }
-      // Expect scheduleObj keys to be full day names, e.g. "Sunday", "Monday", etc.
       const dayNames = [
         "Sunday",
         "Monday",
@@ -375,32 +532,24 @@ app.post(
         "Friday",
         "Saturday",
       ];
-
-      // Determine the last day in the grid by querying the schedule table.
       db.get("SELECT MAX(day) as last_day FROM schedule", [], (err, row) => {
         if (err) {
           return res.status(500).json({ error: err.message });
         }
         const lastDay = row.last_day;
         if (!lastDay) {
-          return res
-            .status(400)
-            .json({ error: "No schedule records found to determine last day." });
+          return res.status(400).json({ error: "No schedule records found to determine last day." });
         }
-        // Parse start_date and lastDay as local dates.
         const [year, month, day] = start_date.split("-");
         const start = new Date(year, month - 1, day);
         const [lyear, lmonth, lday] = lastDay.split("-");
         const end = new Date(lyear, lmonth - 1, lday);
-
         let daysToInsert = [];
         let current = new Date(start);
         while (current <= end) {
-          const currentDayName = dayNames[current.getDay()]; // e.g. "Sunday"
-          // Check if the groomer’s schedule has an entry for this day.
+          const currentDayName = dayNames[current.getDay()];
           if (scheduleObj[currentDayName] && scheduleObj[currentDayName] !== "") {
-            // Use date-fns format to create a local date string in "yyyy-MM-dd" format.
-            const dateStr = format(current, "yyyy-MM-dd");
+            const dateStr = current.toISOString().split("T")[0];
             daysToInsert.push({ van_id: scheduleObj[currentDayName], date: dateStr });
           }
           current.setDate(current.getDate() + 1);
@@ -408,14 +557,12 @@ app.post(
         const totalToInsert = daysToInsert.length;
         if (totalToInsert === 0) {
           return res.status(400).json({
-            error:
-              "No scheduled days found for this groomer between the selected dates.",
+            error: "No scheduled days found for this groomer between the selected dates.",
           });
         }
         let completed = 0;
         let errors = [];
         daysToInsert.forEach(({ van_id, date }) => {
-          // Insert (or replace) a schedule cell for this van and date.
           db.run(
             `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
             [van_id, date, groomer.name, "Scheduled"],
@@ -423,7 +570,6 @@ app.post(
               if (err) {
                 errors.push(err.message);
               }
-              // Insert a corresponding event_history record.
               const timestamp = new Date().toISOString();
               db.run(
                 `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -460,355 +606,7 @@ app.post(
   }
 );
 
-
-// POST /initialize-schedule – initialize the schedule table with blank cells.
-// Expects JSON body: { num_vans: number, num_days: number, start_date: "YYYY-MM-DD" }
-app.post('/initialize-schedule', authenticateToken, authorizeAdmin, (req, res) => {
-  const { num_vans, num_days, start_date } = req.body;
-  if (!num_vans || !num_days || !start_date) {
-    return res.status(400).json({ error: 'num_vans, num_days, and start_date are required' });
-  }
-  const startDate = new Date(start_date);
-  let recordsInserted = 0;
-  const totalRecords = num_vans * num_days;
-  for (let van_id = 1; van_id <= num_vans; van_id++) {
-    for (let i = 0; i < num_days; i++) {
-      const d = new Date(startDate);
-      d.setDate(d.getDate() + i);
-      const dayStr = d.toISOString().split("T")[0];
-      db.run(
-        `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
-        [van_id, dayStr, "", "Blank"],
-        (err) => {
-          if (err) {
-            console.error('Error inserting blank schedule cell:', err.message);
-          }
-          recordsInserted++;
-          if (recordsInserted === totalRecords) {
-            res.json({ message: "Schedule initialized successfully" });
-          }
-        }
-      );
-    }
-  }
-});
-
-// ===== New Endpoints for Cell History =====
-
-// POST /cell-history – insert a new history record for a cell.
-// Expects JSON body with keys: cell_id, date, action, name, status, note, user, and optional timestamp.
-app.post('/cell-history', authenticateToken, authorizeAdmin, (req, res) => {
-  const { cell_id, date, action, name, status, note, user, timestamp } = req.body;
-  if (!cell_id || !date || !action || !name || !status || !user) {
-    return res.status(400).json({ error: "Missing required fields. Expected cell_id, date, action, name, status, and user." });
-  }
-  const ts = timestamp || new Date().toISOString();
-  db.run(
-    `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [cell_id, action, date, ts, name, status, note || '', user],
-    function(err) {
-      if (err) {
-        console.error("Error inserting cell history:", err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      console.log('Cell-History POST Info:', req.body);
-      res.json({ message: "Cell history recorded successfully", id: this.lastID });
-    }
-  );
-});
-
-
-// GET /cell-history/:cell_id – retrieve all history records for a specific cell.
-app.get('/cell-history/:cell_id', authenticateToken, authorizeAdmin, (req, res) => {
-  const { cell_id } = req.params;
-  db.all(
-    `SELECT * FROM event_history WHERE cell_id = ? ORDER BY timestamp DESC`,
-    [cell_id],
-    (err, rows) => {
-      if (err) {
-        console.error("Error fetching cell history:", err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      /* === HIGHLIGHTED CHANGE: Added response to return rows === */
-      res.json(rows);
-    }
-  );
-});
-
-// GET /event-history – Returns event history records filtered by date range and status.
-app.get('/event-history', authenticateToken,  (req, res) => {
-  console.log("GET /event-history query:", req.query);
-  const { start_date, end_date, status } = req.query;
-  if (!start_date || !end_date) {
-    return res.status(400).json({ error: "start_date and end_date are required." });
-  }
-  
-  let query = "SELECT * FROM event_history WHERE date BETWEEN ? AND ?";
-  const params = [start_date, end_date];
-  
-  if (status && status !== "All") {
-    query += " AND status = ?";
-    params.push(status);
-  }
-  
-  query += " ORDER BY timestamp DESC";
-  
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      console.error("Error fetching event history:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    console.log("Event history rows:", rows);
-    res.json(rows);
-  });
-});
-
-
-// User management endpoints
-app.post('/register', (req, res) => {
-  const { id, username, password, role } = req.body;
-  if (!username || !password || !role) {
-    return res.status(400).json({ error: 'username, password, and role are required' });
-  }
-  const salt = bcrypt.genSaltSync(10);
-  const hashedPassword = bcrypt.hashSync(password, salt);
-  db.run(
-    "INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)",
-    [id || Date.now().toString(), username, hashedPassword, role],
-    function (err) {
-      if (err) {
-        console.error('Error registering user:', err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json({ message: 'User registered successfully' });
-    }
-  );
-});
-
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'username and password are required' });
-  }
-  db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
-    if (err) {
-      console.error('Error fetching user:', err.message);
-      return res.status(500).json({ error: 'Internal server error. ' + err.message });
-    }
-    if (!user) {
-      return res.status(401).json({ error: 'User not found' });
-    }
-    const passwordMatches = bcrypt.compareSync(password, user.password);
-    if (!passwordMatches) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const payload = { username: user.username, role: user.role };
-    const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
-    res.json({ token });
-  });
-});
-
-app.post('/forgot', (req, res) => {
-  const { username } = req.body;
-  if (!username) return res.status(400).json({ error: 'username is required' });
-  res.json({ message: `Password reset not implemented yet for user ${username}.` });
-});
-
-// Add this new endpoint to add days to the grid
-
-app.post('/add-days', authenticateToken, authorizeAdmin, (req, res) => {
-  const { start_date, end_date } = req.body; 
-  // start_date: the last date currently in the grid (or a starting point)
-  // end_date: the new end date up to which days should be added
-  
-  if (!start_date || !end_date) {
-    return res.status(400).json({ error: 'start_date and end_date are required.' });
-  }
-  
-  const startDate = new Date(start_date);
-  const endDate = new Date(end_date);
-  if (endDate <= startDate) {
-    return res.status(400).json({ error: 'end_date must be after start_date.' });
-  }
-  
-  // Calculate the number of days to add (excluding the start date)
-  const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-  
-  // Get the list of vans from the vans table.
-  db.all("SELECT id FROM vans", [], (err, vans) => {
-    if (err) {
-      console.error("Error fetching vans:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    if (!vans || vans.length === 0) {
-      return res.status(400).json({ error: "No vans found. Please add vans first." });
-    }
-    
-    let recordsInserted = 0;
-    let errors = [];
-    const totalRecords = vans.length * diffDays;
-    
-    // For each van, add a blank schedule record for each new day.
-    vans.forEach(van => {
-      for (let i = 1; i <= diffDays; i++) {
-        const d = new Date(startDate);
-        d.setDate(d.getDate() + i);
-        const dayStr = d.toISOString().split("T")[0];
-        
-        // Use INSERT OR REPLACE so that if a record already exists, it won’t create a duplicate.
-        db.run(
-          `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
-          [van.id, dayStr, "", "Blank"],
-          (err) => {
-            if (err) {
-              errors.push(err.message);
-            }
-            recordsInserted++;
-            if (recordsInserted === totalRecords) {
-              if (errors.length > 0) {
-                res.status(500).json({ error: errors.join(", ") });
-              } else {
-                res.json({ message: "Days added successfully." });
-              }
-            }
-          }
-        );
-      }
-    });
-  });
-});
-
-// POST /create-groomer-normal-schedule
-app// POST /create-groomer-normal-schedule
-app.post(
-  "/create-groomer-normal-schedule",
-  authenticateToken,
-  authorizeAdmin,
-  (req, res) => {
-    const { groomer_id, start_date } = req.body;
-    if (!groomer_id || !start_date) {
-      return res
-        .status(400)
-        .json({ error: "groomer_id and start_date are required." });
-    }
-    // Look up the groomer from the groomers table.
-    db.get(
-      "SELECT * FROM groomers WHERE id = ?",
-      [groomer_id],
-      (err, groomer) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        if (!groomer) {
-          return res.status(404).json({ error: "Groomer not found." });
-        }
-        // Parse the groomer's normal schedule.
-        let scheduleObj = {};
-        try {
-          scheduleObj =
-            typeof groomer.schedule === "string"
-              ? JSON.parse(groomer.schedule)
-              : groomer.schedule || {};
-        } catch (e) {
-          return res
-            .status(500)
-            .json({ error: "Failed to parse groomer schedule." });
-        }
-        // Expect scheduleObj keys to be full day names, e.g. "Sunday", "Monday", etc.
-        const dayNames = [
-          "Sunday",
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
-        ];
-
-        // Determine the last day in the grid by querying the schedule table.
-        db.get("SELECT MAX(day) as last_day FROM schedule", [], (err, row) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
-          const lastDay = row.last_day;
-          if (!lastDay) {
-            return res
-              .status(400)
-              .json({ error: "No schedule records found to determine last day." });
-          }
-          // Iterate from start_date to lastDay.
-          const start = new Date(start_date);
-          const end = new Date(lastDay);
-          let daysToInsert = [];
-          let current = new Date(start);
-          while (current <= end) {
-            const currentDayName = dayNames[current.getDay()]; // e.g. "Sunday"
-            // Check if the groomer’s schedule has an entry for this day.
-            if (scheduleObj[currentDayName] && scheduleObj[currentDayName] !== "") {
-              const dateStr = current.toISOString().split("T")[0];
-              daysToInsert.push({ van_id: scheduleObj[currentDayName], date: dateStr });
-            }
-            current.setDate(current.getDate() + 1);
-          }
-          const totalToInsert = daysToInsert.length;
-          if (totalToInsert === 0) {
-            return res.status(400).json({
-              error:
-                "No scheduled days found for this groomer between the selected dates.",
-            });
-          }
-          let completed = 0;
-          let errors = [];
-          daysToInsert.forEach(({ van_id, date }) => {
-            // Insert (or replace) a schedule cell for this van and date.
-            db.run(
-              `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
-              [van_id, date, groomer.name, "Scheduled"],
-              (err) => {
-                if (err) {
-                  errors.push(err.message);
-                }
-                // Insert a corresponding event_history record.
-                const timestamp = new Date().toISOString();
-                db.run(
-                  `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    `${van_id}-${date}`,
-                    "create",
-                    date,
-                    timestamp,
-                    groomer.name,
-                    "Scheduled",
-                    "Initial Assignment",
-                    "Utility: Create Groomer Normal Schedule",
-                  ],
-                  function (err2) {
-                    if (err2) {
-                      errors.push(err2.message);
-                    }
-                    completed++;
-                    if (completed === totalToInsert) {
-                      if (errors.length > 0) {
-                        return res
-                          .status(500)
-                          .json({ error: errors.join(", ") });
-                      }
-                      return res.json({
-                        message: `Successfully created ${totalToInsert} schedule records for groomer ${groomer.name}.`,
-                      });
-                    }
-                  }
-                );
-              }
-            );
-          });
-        });
-      }
-    );
-  }
-);
-
-// POST /delete-groomer-schedule-preview
+// DELETE GROOMER SCHEDULE PREVIEW ENDPOINT
 app.post('/delete-groomer-schedule-preview', authenticateToken, authorizeAdmin, (req, res) => {
   const { groomer_id, target_date, vans } = req.body;
   if (!groomer_id || !target_date) {
@@ -833,8 +631,7 @@ app.post('/delete-groomer-schedule-preview', authenticateToken, authorizeAdmin, 
   });
 });
 
-
-// POST /delete-groomer-schedule
+// DELETE GROOMER SCHEDULE ENDPOINT
 app.post('/delete-groomer-schedule', authenticateToken, authorizeAdmin, (req, res) => {
   const { groomer_id, target_date, vans } = req.body;
   if (!groomer_id || !target_date) {
@@ -896,11 +693,7 @@ app.post('/delete-groomer-schedule', authenticateToken, authorizeAdmin, (req, re
   });
 });
 
-//NEW ENDS POINTS FOR THE MODELING CAPABILITY 
-
-// --- Model Endpoints ---
-
-// GET /model-schedule – return all model schedule cells.
+// MODELING ENDPOINTS (for schedule modeling)
 app.get('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM model_schedule", [], (err, rows) => {
     if (err) {
@@ -909,12 +702,9 @@ app.get('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
     }
     console.log("GET /model-schedule returns:", rows);
     res.json(rows);
-    console.log("Fetched model-schedule:", rows);
   });
 });
 
-// PUT /model-schedule – update the model schedule grid.
-// Expects a flat array of cell objects with keys: van_id, day, assignment, status.
 app.put('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
   const scheduleData = req.body;
   if (!Array.isArray(scheduleData)) {
@@ -944,7 +734,6 @@ app.put('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// GET /model-groomers – return all model groomers.
 app.get('/model-groomers', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM model_groomers", [], (err, rows) => {
     if (err) {
@@ -956,7 +745,6 @@ app.get('/model-groomers', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// GET /model-vans – return all model vans.
 app.get('/model-vans', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM model_vans", [], (err, rows) => {
     if (err) {
@@ -968,6 +756,56 @@ app.get('/model-vans', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
+// USER MANAGEMENT ENDPOINTS
+app.post('/register', (req, res) => {
+  const { id, username, password, role } = req.body;
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: 'username, password, and role are required' });
+  }
+  const salt = bcrypt.genSaltSync(10);
+  const hashedPassword = bcrypt.hashSync(password, salt);
+  db.run(
+    "INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)",
+    [id || Date.now().toString(), username, hashedPassword, role],
+    function (err) {
+      if (err) {
+        console.error('Error registering user:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'User registered successfully' });
+    }
+  );
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username and password are required' });
+  }
+  db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+    if (err) {
+      console.error('Error fetching user:', err.message);
+      return res.status(500).json({ error: 'Internal server error. ' + err.message });
+    }
+    if (!user) {
+      console.log(`User not found for username: ${username}`);
+      return res.status(401).json({ error: 'User not found' });
+    }
+    const passwordMatches = bcrypt.compareSync(password, user.password);
+    if (!passwordMatches) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const payload = { username: user.username, role: user.role };
+    const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
+    res.json({ token });
+  });
+});
+
+app.post('/forgot', (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'username is required' });
+  res.json({ message: `Password reset not implemented yet for user ${username}.` });
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

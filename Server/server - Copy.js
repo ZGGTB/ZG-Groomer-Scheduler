@@ -21,14 +21,19 @@ app.use((req, res, next) => {
 // Secret key for JWT signing (store securely in production)
 const secretKey = 'your-secret-key';
 
-// Open (or create) the SQLite database file named ZG-Grooming-Scheduler.db
-const dbPath = path.resolve(__dirname, 'ZG-Grooming-Scheduler.db');
+// Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db
+const dbPath = path.resolve(__dirname, "../data", "ZG-Groomer-Scheduler.db");
+
+
+//const dbPath = path.resolve(__dirname, 'ZG-Groomer-Scheduler.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
   } else {
-    console.log('Connected to the SQLite database.');
+    console.log('Connected to the SQLite database at',dbPath);
     
+
+
     // Create events table
     db.run(`
       CREATE TABLE IF NOT EXISTS events (
@@ -230,6 +235,32 @@ app.get('/groomers', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
+// PUT /groomers/:id – update a groomer’s name and schedule
+app.put('/groomers/:id', authenticateToken, authorizeAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, schedule } = req.body;
+  if (!name || !schedule) {
+    return res.status(400).json({ error: 'Name and schedule are required.' });
+  }
+  // Convert schedule to a JSON string if it's an object.
+  const scheduleStr = typeof schedule === 'object' ? JSON.stringify(schedule) : schedule;
+  db.run(
+    "UPDATE groomers SET name = ?, schedule = ? WHERE id = ?",
+    [name, scheduleStr, id],
+    function(err) {
+      if (err) {
+        console.error("Error updating groomer:", err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Groomer not found' });
+      }
+      res.json({ message: "Groomer updated successfully" });
+    }
+  );
+});
+
+
 // GET /schedule – retrieve all schedule cells as a flat array.
 app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM schedule", [], (err, rows) => {
@@ -241,6 +272,7 @@ app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
     res.json(rows);
   });
 });
+
 
 // PUT /schedule – persist the schedule grid.
 // Expects a flat array of schedule cell objects with keys: van_id, day, assignment, status.
@@ -272,6 +304,162 @@ app.put('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
     );
   });
 });
+
+// PUT /groomers/:id – update a groomer’s name and schedule
+app.put('/groomers/:id', authenticateToken, authorizeAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, schedule } = req.body;
+  if (!name || !schedule) {
+    return res.status(400).json({ error: 'Name and schedule are required.' });
+  }
+  // Convert schedule to a JSON string if it's an object.
+  const scheduleStr = typeof schedule === 'object' ? JSON.stringify(schedule) : schedule;
+  db.run(
+    "UPDATE groomers SET name = ?, schedule = ? WHERE id = ?",
+    [name, scheduleStr, id],
+    function(err) {
+      if (err) {
+        console.error("Error updating groomer:", err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Groomer not found' });
+      }
+      res.json({ message: "Groomer updated successfully" });
+    }
+  );
+});
+
+// POST /create-groomer-normal-schedule
+const { format } = require("date-fns");
+
+// POST /create-groomer-normal-schedule
+app.post(
+  "/create-groomer-normal-schedule",
+  authenticateToken,
+  authorizeAdmin,
+  (req, res) => {
+    const { groomer_id, start_date } = req.body;
+    if (!groomer_id || !start_date) {
+      return res
+        .status(400)
+        .json({ error: "groomer_id and start_date are required." });
+    }
+    // Look up the groomer from the groomers table.
+    db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (!groomer) {
+        return res.status(404).json({ error: "Groomer not found." });
+      }
+      // Parse the groomer's normal schedule.
+      let scheduleObj = {};
+      try {
+        scheduleObj =
+          typeof groomer.schedule === "string"
+            ? JSON.parse(groomer.schedule)
+            : groomer.schedule || {};
+      } catch (e) {
+        return res
+          .status(500)
+          .json({ error: "Failed to parse groomer schedule." });
+      }
+      // Expect scheduleObj keys to be full day names, e.g. "Sunday", "Monday", etc.
+      const dayNames = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+
+      // Determine the last day in the grid by querying the schedule table.
+      db.get("SELECT MAX(day) as last_day FROM schedule", [], (err, row) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        const lastDay = row.last_day;
+        if (!lastDay) {
+          return res
+            .status(400)
+            .json({ error: "No schedule records found to determine last day." });
+        }
+        // Parse start_date and lastDay as local dates.
+        const [year, month, day] = start_date.split("-");
+        const start = new Date(year, month - 1, day);
+        const [lyear, lmonth, lday] = lastDay.split("-");
+        const end = new Date(lyear, lmonth - 1, lday);
+
+        let daysToInsert = [];
+        let current = new Date(start);
+        while (current <= end) {
+          const currentDayName = dayNames[current.getDay()]; // e.g. "Sunday"
+          // Check if the groomer’s schedule has an entry for this day.
+          if (scheduleObj[currentDayName] && scheduleObj[currentDayName] !== "") {
+            // Use date-fns format to create a local date string in "yyyy-MM-dd" format.
+            const dateStr = format(current, "yyyy-MM-dd");
+            daysToInsert.push({ van_id: scheduleObj[currentDayName], date: dateStr });
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        const totalToInsert = daysToInsert.length;
+        if (totalToInsert === 0) {
+          return res.status(400).json({
+            error:
+              "No scheduled days found for this groomer between the selected dates.",
+          });
+        }
+        let completed = 0;
+        let errors = [];
+        daysToInsert.forEach(({ van_id, date }) => {
+          // Insert (or replace) a schedule cell for this van and date.
+          db.run(
+            `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+            [van_id, date, groomer.name, "Scheduled"],
+            (err) => {
+              if (err) {
+                errors.push(err.message);
+              }
+              // Insert a corresponding event_history record.
+              const timestamp = new Date().toISOString();
+              db.run(
+                `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  `${van_id}-${date}`,
+                  "create",
+                  date,
+                  timestamp,
+                  groomer.name,
+                  "Scheduled",
+                  "Initial Assignment",
+                  "Utility: Create Groomer Normal Schedule",
+                ],
+                function (err2) {
+                  if (err2) {
+                    errors.push(err2.message);
+                  }
+                  completed++;
+                  if (completed === totalToInsert) {
+                    if (errors.length > 0) {
+                      return res.status(500).json({ error: errors.join(", ") });
+                    }
+                    return res.json({
+                      message: `Successfully created ${totalToInsert} schedule records for groomer ${groomer.name}.`,
+                    });
+                  }
+                }
+              );
+            }
+          );
+        });
+      });
+    });
+  }
+);
+
 
 // POST /initialize-schedule – initialize the schedule table with blank cells.
 // Expects JSON body: { num_vans: number, num_days: number, start_date: "YYYY-MM-DD" }
@@ -347,6 +535,34 @@ app.get('/cell-history/:cell_id', authenticateToken, authorizeAdmin, (req, res) 
   );
 });
 
+// GET /event-history – Returns event history records filtered by date range and status.
+app.get('/event-history', authenticateToken,  (req, res) => {
+  console.log("GET /event-history query:", req.query);
+  const { start_date, end_date, status } = req.query;
+  if (!start_date || !end_date) {
+    return res.status(400).json({ error: "start_date and end_date are required." });
+  }
+  
+  let query = "SELECT * FROM event_history WHERE date BETWEEN ? AND ?";
+  const params = [start_date, end_date];
+  
+  if (status && status !== "All") {
+    query += " AND status = ?";
+    params.push(status);
+  }
+  
+  query += " ORDER BY timestamp DESC";
+  
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error("Error fetching event history:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    console.log("Event history rows:", rows);
+    res.json(rows);
+  });
+});
+
 
 // User management endpoints
 app.post('/register', (req, res) => {
@@ -377,11 +593,10 @@ app.post('/login', (req, res) => {
   db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
     if (err) {
       console.error('Error fetching user:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Internal server error. ' + err.message });
     }
     if (!user) {
-      console.log(`User not found for username: ${username}`);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'User not found' });
     }
     const passwordMatches = bcrypt.compareSync(password, user.password);
     if (!passwordMatches) {
@@ -460,6 +675,296 @@ app.post('/add-days', authenticateToken, authorizeAdmin, (req, res) => {
         );
       }
     });
+  });
+});
+
+// POST /create-groomer-normal-schedule
+app// POST /create-groomer-normal-schedule
+app.post(
+  "/create-groomer-normal-schedule",
+  authenticateToken,
+  authorizeAdmin,
+  (req, res) => {
+    const { groomer_id, start_date } = req.body;
+    if (!groomer_id || !start_date) {
+      return res
+        .status(400)
+        .json({ error: "groomer_id and start_date are required." });
+    }
+    // Look up the groomer from the groomers table.
+    db.get(
+      "SELECT * FROM groomers WHERE id = ?",
+      [groomer_id],
+      (err, groomer) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        if (!groomer) {
+          return res.status(404).json({ error: "Groomer not found." });
+        }
+        // Parse the groomer's normal schedule.
+        let scheduleObj = {};
+        try {
+          scheduleObj =
+            typeof groomer.schedule === "string"
+              ? JSON.parse(groomer.schedule)
+              : groomer.schedule || {};
+        } catch (e) {
+          return res
+            .status(500)
+            .json({ error: "Failed to parse groomer schedule." });
+        }
+        // Expect scheduleObj keys to be full day names, e.g. "Sunday", "Monday", etc.
+        const dayNames = [
+          "Sunday",
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+        ];
+
+        // Determine the last day in the grid by querying the schedule table.
+        db.get("SELECT MAX(day) as last_day FROM schedule", [], (err, row) => {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+          const lastDay = row.last_day;
+          if (!lastDay) {
+            return res
+              .status(400)
+              .json({ error: "No schedule records found to determine last day." });
+          }
+          // Iterate from start_date to lastDay.
+          const start = new Date(start_date);
+          const end = new Date(lastDay);
+          let daysToInsert = [];
+          let current = new Date(start);
+          while (current <= end) {
+            const currentDayName = dayNames[current.getDay()]; // e.g. "Sunday"
+            // Check if the groomer’s schedule has an entry for this day.
+            if (scheduleObj[currentDayName] && scheduleObj[currentDayName] !== "") {
+              const dateStr = current.toISOString().split("T")[0];
+              daysToInsert.push({ van_id: scheduleObj[currentDayName], date: dateStr });
+            }
+            current.setDate(current.getDate() + 1);
+          }
+          const totalToInsert = daysToInsert.length;
+          if (totalToInsert === 0) {
+            return res.status(400).json({
+              error:
+                "No scheduled days found for this groomer between the selected dates.",
+            });
+          }
+          let completed = 0;
+          let errors = [];
+          daysToInsert.forEach(({ van_id, date }) => {
+            // Insert (or replace) a schedule cell for this van and date.
+            db.run(
+              `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+              [van_id, date, groomer.name, "Scheduled"],
+              (err) => {
+                if (err) {
+                  errors.push(err.message);
+                }
+                // Insert a corresponding event_history record.
+                const timestamp = new Date().toISOString();
+                db.run(
+                  `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    `${van_id}-${date}`,
+                    "create",
+                    date,
+                    timestamp,
+                    groomer.name,
+                    "Scheduled",
+                    "Initial Assignment",
+                    "Utility: Create Groomer Normal Schedule",
+                  ],
+                  function (err2) {
+                    if (err2) {
+                      errors.push(err2.message);
+                    }
+                    completed++;
+                    if (completed === totalToInsert) {
+                      if (errors.length > 0) {
+                        return res
+                          .status(500)
+                          .json({ error: errors.join(", ") });
+                      }
+                      return res.json({
+                        message: `Successfully created ${totalToInsert} schedule records for groomer ${groomer.name}.`,
+                      });
+                    }
+                  }
+                );
+              }
+            );
+          });
+        });
+      }
+    );
+  }
+);
+
+// POST /delete-groomer-schedule-preview
+app.post('/delete-groomer-schedule-preview', authenticateToken, authorizeAdmin, (req, res) => {
+  const { groomer_id, target_date, vans } = req.body;
+  if (!groomer_id || !target_date) {
+    return res.status(400).json({ error: "groomer_id and target_date are required." });
+  }
+  db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!groomer) return res.status(404).json({ error: "Groomer not found." });
+    let vanFilterClause = "";
+    let params = [target_date, groomer.name];
+    if (vans !== "ALL") {
+      const vanArray = vans.split(",");
+      const placeholders = vanArray.map(() => "?").join(",");
+      vanFilterClause = `AND van_id IN (${placeholders})`;
+      params = [target_date, groomer.name, ...vanArray];
+    }
+    const query = `SELECT * FROM schedule WHERE day >= ? AND assignment = ? ${vanFilterClause}`;
+    db.all(query, params, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  });
+});
+
+
+// POST /delete-groomer-schedule
+app.post('/delete-groomer-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  const { groomer_id, target_date, vans } = req.body;
+  if (!groomer_id || !target_date) {
+    return res.status(400).json({ error: "groomer_id and target_date are required." });
+  }
+  db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!groomer) return res.status(404).json({ error: "Groomer not found." });
+    let vanFilterClause = "";
+    let params = [target_date, groomer.name];
+    if (vans !== "ALL") {
+      const vanArray = vans.split(",");
+      const placeholders = vanArray.map(() => "?").join(",");
+      vanFilterClause = `AND van_id IN (${placeholders})`;
+      params = [target_date, groomer.name, ...vanArray];
+    }
+    const query = `SELECT * FROM schedule WHERE day >= ? AND assignment = ? ${vanFilterClause}`;
+    db.all(query, params, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({ error: "No matching schedule records found." });
+      }
+      let completed = 0;
+      let errors = [];
+      rows.forEach((row) => {
+        db.run(
+          "DELETE FROM schedule WHERE van_id = ? AND day = ?",
+          [row.van_id, row.day],
+          function (err) {
+            if (err) errors.push(err.message);
+            const timestamp = new Date().toISOString();
+            db.run(
+              `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                `${row.van_id}-${row.day}`,
+                "deleted",
+                row.day,
+                timestamp,
+                row.assignment,
+                row.status,
+                "Utility: Delete Groomer Schedule",
+                "Utility User",
+              ],
+              function (err2) {
+                if (err2) errors.push(err2.message);
+                completed++;
+                if (completed === rows.length) {
+                  if (errors.length > 0) {
+                    return res.status(500).json({ error: errors.join(", ") });
+                  }
+                  return res.json({ message: `Successfully deleted ${rows.length} schedule records for groomer ${groomer.name}.` });
+                }
+              }
+            );
+          }
+        );
+      });
+    });
+  });
+});
+
+//NEW ENDS POINTS FOR THE MODELING CAPABILITY 
+
+// --- Model Endpoints ---
+
+// GET /model-schedule – return all model schedule cells.
+app.get('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_schedule", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model schedule:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    console.log("GET /model-schedule returns:", rows);
+    res.json(rows);
+    console.log("Fetched model-schedule:", rows);
+  });
+});
+
+// PUT /model-schedule – update the model schedule grid.
+// Expects a flat array of cell objects with keys: van_id, day, assignment, status.
+app.put('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  const scheduleData = req.body;
+  if (!Array.isArray(scheduleData)) {
+    return res.status(400).json({ error: "Invalid schedule data format. Expected an array." });
+  }
+  let completed = 0;
+  let errorOccurred = false;
+  scheduleData.forEach((cell) => {
+    const { van_id, day, assignment, status } = cell;
+    db.run(
+      `INSERT OR REPLACE INTO model_schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+      [van_id, day, assignment, status],
+      (err) => {
+        if (err) {
+          console.error("Error updating model schedule cell:", err.message);
+          errorOccurred = true;
+        }
+        completed++;
+        if (completed === scheduleData.length) {
+          if (errorOccurred) {
+            return res.status(500).json({ error: "Error updating model schedule." });
+          }
+          res.json({ message: "Model schedule updated successfully." });
+        }
+      }
+    );
+  });
+});
+
+// GET /model-groomers – return all model groomers.
+app.get('/model-groomers', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_groomers", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model groomers:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+    console.log("Fetched model-groomers:", rows);
+  });
+});
+
+// GET /model-vans – return all model vans.
+app.get('/model-vans', authenticateToken, authorizeAdmin, (req, res) => {
+  db.all("SELECT * FROM model_vans", [], (err, rows) => {
+    if (err) {
+      console.error("Error fetching model vans:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+    console.log("Fetched model-vans:", rows);
   });
 });
 
