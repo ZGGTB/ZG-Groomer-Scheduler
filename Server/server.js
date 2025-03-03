@@ -459,7 +459,8 @@ app.use(express.static(path.join(__dirname, '../build')));
 // For any request that doesn't match an API route, send back the React index.html file.
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build', 'index.html'));
-});
+})
+;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
