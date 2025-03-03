@@ -237,6 +237,27 @@ app.put('/groomers/:id', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
+// POST endpoint for adding a new groomer
+app.post('/groomers', (req, res) => {
+  const { id, name, schedule, inactive } = req.body;
+  if (!name || !schedule) {
+    return res.status(400).json({ error: "Name and schedule are required" });
+  }
+  // You might want to use a generated id instead of the client-sent id.
+  db.run(
+    "INSERT INTO groomers (id, name, schedule) VALUES (?, ?, ?)",
+    [id, name, JSON.stringify(schedule)],
+    function(err) {
+      if (err) {
+        console.error("Error inserting groomer:", err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: "Groomer added successfully", id });
+    }
+  );
+});
+
+
 // SCHEDULE ENDPOINTS
 app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM schedule", [], (err, rows) => {

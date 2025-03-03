@@ -121,12 +121,33 @@ const GroomerManagement = () => {
         schedule: newSchedule,
         inactive: "N",
       };
-      addGroomer(groomerToAdd);
-      setNewName("");
-      setNewSchedule(initialSchedule);
-      setAddDialogOpen(false);
+      fetch(`${process.env.REACT_APP_API_URL}/groomers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(groomerToAdd),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to add groomer");
+          return res.json();
+        })
+        .then((data) => {
+          console.log("Groomer added:", data);
+          // Optionally update context/local state here.
+          addGroomer(groomerToAdd);
+          setNewName("");
+          setNewSchedule(initialSchedule);
+          setAddDialogOpen(false);
+        })
+        .catch((err) => {
+          console.error("Error adding groomer:", err);
+          alert("Error adding groomer: " + err.message);
+        });
     }
   };
+  
 
   // Open edit dialog for an existing groomer.
   const handleEditClick = (groomer) => {
