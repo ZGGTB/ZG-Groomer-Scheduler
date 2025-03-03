@@ -258,6 +258,169 @@ app.post('/groomers', (req, res) => {
 });
 
 
+// POST /create-groomer-normal-schedule
+const { format } = require("date-fns");
+
+// POST /create-groomer-normal-schedule
+app.post(
+  "/create-groomer-normal-schedule",
+  authenticateToken,
+  authorizeAdmin,
+  (req, res) => {
+    const { groomer_id, start_date } = req.body;
+    if (!groomer_id || !start_date) {
+      return res
+        .status(400)
+        .json({ error: "groomer_id and start_date are required." });
+    }
+    // Look up the groomer from the groomers table.
+    db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (!groomer) {
+        return res.status(404).json({ error: "Groomer not found." });
+      }
+      // Parse the groomer's normal schedule.
+      let scheduleObj = {};
+      try {
+        scheduleObj =
+          typeof groomer.schedule === "string"
+            ? JSON.parse(groomer.schedule)
+            : groomer.schedule || {};
+      } catch (e) {
+        return res
+          .status(500)
+          .json({ error: "Failed to parse groomer schedule." });
+      }
+      // Expect scheduleObj keys to be full day names, e.g. "Sunday", "Monday", etc.
+      const dayNames = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+
+      // Determine the last day in the grid by querying the schedule table.
+      db.get("SELECT MAX(day) as last_day FROM schedule", [], (err, row) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        const lastDay = row.last_day;
+        if (!lastDay) {
+          return res
+            .status(400)
+            .json({ error: "No schedule records found to determine last day." });
+        }
+        // Parse start_date and lastDay as local dates.
+        const [year, month, day] = start_date.split("-");
+        const start = new Date(year, month - 1, day);
+        const [lyear, lmonth, lday] = lastDay.split("-");
+        const end = new Date(lyear, lmonth - 1, lday);
+
+        let daysToInsert = [];
+        let current = new Date(start);
+        while (current <= end) {
+          const currentDayName = dayNames[current.getDay()]; // e.g. "Sunday"
+          // Check if the groomer’s schedule has an entry for this day.
+          if (scheduleObj[currentDayName] && scheduleObj[currentDayName] !== "") {
+            // Use date-fns format to create a local date string in "yyyy-MM-dd" format.
+            const dateStr = format(current, "yyyy-MM-dd");
+            daysToInsert.push({ van_id: scheduleObj[currentDayName], date: dateStr });
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        const totalToInsert = daysToInsert.length;
+        if (totalToInsert === 0) {
+          return res.status(400).json({
+            error:
+              "No scheduled days found for this groomer between the selected dates.",
+          });
+        }
+        let completed = 0;
+        let errors = [];
+        daysToInsert.forEach(({ van_id, date }) => {
+          // Insert (or replace) a schedule cell for this van and date.
+          db.run(
+            `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+            [van_id, date, groomer.name, "Scheduled"],
+            (err) => {
+              if (err) {
+                errors.push(err.message);
+              }
+              // Insert a corresponding event_history record.
+              const timestamp = new Date().toISOString();
+              db.run(
+                `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  `${van_id}-${date}`,
+                  "create",
+                  date,
+                  timestamp,
+                  groomer.name,
+                  "Scheduled",
+                  "Initial Assignment",
+                  "Utility: Create Groomer Normal Schedule",
+                ],
+                function (err2) {
+                  if (err2) {
+                    errors.push(err2.message);
+                  }
+                  completed++;
+                  if (completed === totalToInsert) {
+                    if (errors.length > 0) {
+                      return res.status(500).json({ error: errors.join(", ") });
+                    }
+                    return res.json({
+                      message: `Successfully created ${totalToInsert} schedule records for groomer ${groomer.name}.`,
+                    });
+                  }
+                }
+              );
+            }
+          );
+        });
+      });
+    });
+  }
+);
+
+
+// POST /initialize-schedule – initialize the schedule table with blank cells.
+// Expects JSON body: { num_vans: number, num_days: number, start_date: "YYYY-MM-DD" }
+app.post('/initialize-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  const { num_vans, num_days, start_date } = req.body;
+  if (!num_vans || !num_days || !start_date) {
+    return res.status(400).json({ error: 'num_vans, num_days, and start_date are required' });
+  }
+  const startDate = new Date(start_date);
+  let recordsInserted = 0;
+  const totalRecords = num_vans * num_days;
+  for (let van_id = 1; van_id <= num_vans; van_id++) {
+    for (let i = 0; i < num_days; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      const dayStr = d.toISOString().split("T")[0];
+      db.run(
+        `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+        [van_id, dayStr, "", "Blank"],
+        (err) => {
+          if (err) {
+            console.error('Error inserting blank schedule cell:', err.message);
+          }
+          recordsInserted++;
+          if (recordsInserted === totalRecords) {
+            res.json({ message: "Schedule initialized successfully" });
+          }
+        }
+      );
+    }
+  }
+});
+
 // SCHEDULE ENDPOINTS
 app.get('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM schedule", [], (err, rows) => {
