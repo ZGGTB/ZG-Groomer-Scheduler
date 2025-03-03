@@ -1,18 +1,2 @@
-.custom-event-container {
-  padding: 4px;
-}
-
-.custom-event-title {
-  font-weight: bold;
-  color: #d32f2f; /* Customize color as desired */
-  font-size: 1em;
-  font-family: Arial, sans-serif;
-}
-
-.custom-event-date {
-  margin-top: 2px;
-  font-size: 0.8em;
-}
-
 /data/ZG-Groomer-Scheduler.db
 
