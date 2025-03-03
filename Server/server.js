@@ -151,7 +151,7 @@ function authorizeAdmin(req, res, next) {
   }
 }
 
-// TEST ENDPOINT
+// TEST ENDPOINT WORKING
 app.get('/test', (req, res) => {
   console.log('Test endpoint hit.');
   res.json({ message: 'Test endpoint working' });
