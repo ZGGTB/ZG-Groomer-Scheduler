@@ -98,24 +98,22 @@ const getCellBackgroundColor = (status) => {
 };
 
 //
-// CHANGED: Updated function signature to accept optional props for groomers and vans.
-// If provided, these will be used instead of the context values.
-//
+// MODIFIED: Accept additional props for groomers, vans, headerStyle, and firstColumnStyle.
+// This allows ModelingGrid to pass in its own model-specific data and styling.
 const CustomGrid = ({
   gridData,
   onGridChange,
   onSaveSchedule,
   numRows,
-  groomers: propsGroomers,   // Optional prop for groomers data
-  vans: propsVans            // Optional prop for vans data
+  groomers: propsGroomers,
+  vans: propsVans,
+  headerStyle,      // optional style for header boxes (e.g. backgroundColor)
+  firstColumnStyle, // optional style for first column boxes
 }) => {
-  // Retrieve data from context
-  const { vans } = useContext(VanContext);
-  const { groomers } = useContext(GroomerContext);
-
-  // CHANGED: Use props if provided; otherwise, fallback to context values.
-  const usedVans = propsVans && propsVans.length > 0 ? propsVans : vans;
-  const usedGroomers = propsGroomers && propsGroomers.length > 0 ? propsGroomers : groomers;
+  const { vans: contextVans } = useContext(VanContext);
+  const { groomers: contextGroomers } = useContext(GroomerContext);
+  const usedVans = propsVans && propsVans.length > 0 ? propsVans : contextVans;
+  const usedGroomers = propsGroomers && propsGroomers.length > 0 ? propsGroomers : contextGroomers;
 
   const vanList =
     usedVans && usedVans.length > 0
@@ -159,7 +157,7 @@ const CustomGrid = ({
 
   const currentUser = localStorage.getItem("username") || "Unknown";
 
-  // --- Function to toggle a column hidden state ---
+  // --- Function to toggle column hidden state ---
   const toggleHideColumn = (colIndex) => {
     if (hiddenColumns.includes(colIndex)) {
       setHiddenColumns(hiddenColumns.filter((i) => i !== colIndex));
@@ -168,7 +166,7 @@ const CustomGrid = ({
     }
   };
 
-  // --- Compute visible column indices based on hiddenColumns and showHiddenColumns flag ---
+  // --- Compute visible column indices ---
   const visibleColumnIndices =
     adjustedGridData.length > 0
       ? adjustedGridData[0]
@@ -183,7 +181,6 @@ const CustomGrid = ({
     const [ , destVan, destDay ] = destination.droppableId.split("-").map(Number);
     const newGrid = adjustedGridData.map((row) => row.slice());
     const timestamp = new Date().toISOString();
-    // For consistency, use all dates (we assume grid structure remains the same)
     const distinctDates =
       newGrid.length > 0 ? newGrid[0].map((cell) => cell.day) : [];
     const dragDropRecord = {
@@ -200,7 +197,7 @@ const CustomGrid = ({
       history: [...(sourceCellData.history || []), dragDropRecord],
     };
     console.log(`Copied cell from [${srcVan}, ${srcDay}] to [${destVan}, ${destDay}]`);
-    onGridChange(newGrid.flat()); // CHANGED: Flatten grid before passing up.
+    onGridChange(newGrid.flat());
   };
 
   const openEditorModal = (vanIndex, dayIndex) => {
@@ -226,7 +223,7 @@ const CustomGrid = ({
       newGrid[vanIndex][dayIndex].assignment = editorGroomer;
       newGrid[vanIndex][dayIndex].status = editorStatus;
       newGrid[vanIndex][dayIndex].history.push(updateRecord);
-      onGridChange(newGrid.flat()); // CHANGED: Pass flattened grid.
+      onGridChange(newGrid.flat());
       fetch(`${process.env.REACT_APP_API_URL}/cell-history`, {
         method: "POST",
         headers: {
@@ -256,7 +253,7 @@ const CustomGrid = ({
     const cellData = adjustedGridData[vanIndex][dayIndex];
     if (cellData) {
       const cell_id = `${cellData.van_id}-${cellData.day}`;
-      const toke = localStorage.getItem("token");
+      const token = localStorage.getItem("token");
       fetch(`${process.env.REACT_APP_API_URL}/cell-history/${cell_id}`, {
         headers: { Authorization: "Bearer " + token },
       })
@@ -295,7 +292,7 @@ const CustomGrid = ({
       sx={{
         display: "grid",
         gridTemplateColumns: `${cellWidth}px repeat(${visibleColumnIndices.length}, ${cellWidth}px)`,
-        backgroundColor: "#1976d2",
+        backgroundColor: headerStyle ? headerStyle.backgroundColor : "#1976d2",
         borderBottom: "1px solid #ccc",
       }}
     >
@@ -305,8 +302,8 @@ const CustomGrid = ({
           height: cellHeight,
           border: "1px solid #1976d2",
           boxSizing: "border-box",
-          backgroundColor: "#FFFFFF",
-          color: "black",
+          backgroundColor: firstColumnStyle ? firstColumnStyle.backgroundColor : "#FFFFFF",
+          color: firstColumnStyle ? firstColumnStyle.color : "black",
           position: "sticky",
           left: 0,
           zIndex: 3,
@@ -345,7 +342,8 @@ const CustomGrid = ({
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            backgroundColor: "#1976d2",
+            // MODIFIED: Use headerStyle for day header background if provided.
+            backgroundColor: headerStyle ? headerStyle.backgroundColor : "#1976d2",
             color: "white",
             opacity: hiddenColumns.includes(i) ? 0.5 : 1,
           }}
@@ -386,7 +384,7 @@ const CustomGrid = ({
   if (!adjustedGridData || adjustedGridData.length === 0) {
     body = <Typography>No schedule data available.</Typography>;
   } else {
-    body = vans.map((van, vanIndex) => {
+    body = usedVans.map((van, vanIndex) => {
       if (hiddenRows.includes(vanIndex) && !showHidden) return null;
       const row = adjustedGridData[vanIndex];
       if (!row || (adjustedGridData.length > 0 && row.length !== adjustedGridData[0].length)) {
@@ -410,8 +408,8 @@ const CustomGrid = ({
               boxSizing: "border-box",
               textAlign: "center",
               fontWeight: "bold",
-              backgroundColor: "#1976d2",
-              color: "white",
+              backgroundColor: firstColumnStyle ? firstColumnStyle.backgroundColor : "#1976d2",
+              color: firstColumnStyle ? firstColumnStyle.color : "white",
               position: "sticky",
               left: 0,
               zIndex: 1,

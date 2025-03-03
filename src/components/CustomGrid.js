@@ -40,17 +40,24 @@ function addDaysToDate(dateStr, days) {
 }
 
 // --- Helper: Build a 2D grid dynamically from schedule cells using van list ---
-export const buildGridFromSchedule = (cells, vanList) => {
+// Now accepts a third parameter dateFilter to only include cells with day >= dateFilter.
+export const buildGridFromSchedule = (cells, vanList, dateFilter) => {
+  // Filter cells based on dateFilter if provided.
+  const filteredCells = dateFilter
+    ? cells.filter(cell => cell.day >= dateFilter)
+    : cells;
+
   const vanIds = vanList.map((v) => v.id).sort((a, b) => a - b);
   const datesSet = new Set();
-  cells.forEach((cell) => {
+  filteredCells.forEach((cell) => {
     datesSet.add(cell.day);
   });
   const dates = [...datesSet].sort();
   console.log("Distinct van IDs (from vanList):", vanIds);
-  console.log("Distinct dates (from schedule):", dates);
+  console.log("Distinct dates (filtered from schedule):", dates);
+
   const cellMap = {};
-  cells.forEach((cell) => {
+  filteredCells.forEach((cell) => {
     const key = `${cell.van_id}-${cell.day}`;
     if (!cellMap[key]) {
       cellMap[key] = {
@@ -98,8 +105,8 @@ const getCellBackgroundColor = (status) => {
 };
 
 //
-// MODIFIED: Accept additional props for groomers, vans, headerStyle, and firstColumnStyle.
-// This allows ModelingGrid to pass in its own model-specific data and styling.
+// MODIFIED: Accept additional props for groomers, vans, headerStyle, firstColumnStyle,
+// and now dateFilter for filtering grid dates.
 const CustomGrid = ({
   gridData,
   onGridChange,
@@ -109,6 +116,7 @@ const CustomGrid = ({
   vans: propsVans,
   headerStyle,      // optional style for header boxes (e.g. backgroundColor)
   firstColumnStyle, // optional style for first column boxes
+  dateFilter,       // filter to show dates from this day forward
 }) => {
   const { vans: contextVans } = useContext(VanContext);
   const { groomers: contextGroomers } = useContext(GroomerContext);
@@ -122,7 +130,7 @@ const CustomGrid = ({
 
   const adjustedGridData =
     gridData && gridData.length > 0
-      ? buildGridFromSchedule(gridData, vanList)
+      ? buildGridFromSchedule(gridData, vanList, dateFilter)
       : [];
 
   // --- Compute duplicate assignments per column ---
@@ -342,7 +350,6 @@ const CustomGrid = ({
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            // MODIFIED: Use headerStyle for day header background if provided.
             backgroundColor: headerStyle ? headerStyle.backgroundColor : "#1976d2",
             color: "white",
             opacity: hiddenColumns.includes(i) ? 0.5 : 1,
