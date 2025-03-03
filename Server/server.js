@@ -259,9 +259,6 @@ app.post('/groomers', (req, res) => {
 
 
 // POST /create-groomer-normal-schedule
-const { format } = require("date-fns");
-
-// POST /create-groomer-normal-schedule
 app.post(
   "/create-groomer-normal-schedule",
   authenticateToken,
