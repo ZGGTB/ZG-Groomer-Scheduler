@@ -385,6 +385,71 @@ app.post(
   }
 );
 
+//ADD DAYS TO GRID ENDPOINT 
+// Add this new endpoint to add days to the grid
+
+app.post('/add-days', authenticateToken, authorizeAdmin, (req, res) => {
+  const { start_date, end_date } = req.body; 
+  // start_date: the last date currently in the grid (or a starting point)
+  // end_date: the new end date up to which days should be added
+  
+  if (!start_date || !end_date) {
+    return res.status(400).json({ error: 'start_date and end_date are required.' });
+  }
+  
+  const startDate = new Date(start_date);
+  const endDate = new Date(end_date);
+  if (endDate <= startDate) {
+    return res.status(400).json({ error: 'end_date must be after start_date.' });
+  }
+  
+  // Calculate the number of days to add (excluding the start date)
+  const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  
+  // Get the list of vans from the vans table.
+  db.all("SELECT id FROM vans", [], (err, vans) => {
+    if (err) {
+      console.error("Error fetching vans:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    if (!vans || vans.length === 0) {
+      return res.status(400).json({ error: "No vans found. Please add vans first." });
+    }
+    
+    let recordsInserted = 0;
+    let errors = [];
+    const totalRecords = vans.length * diffDays;
+    
+    // For each van, add a blank schedule record for each new day.
+    vans.forEach(van => {
+      for (let i = 1; i <= diffDays; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        const dayStr = d.toISOString().split("T")[0];
+        
+        // Use INSERT OR REPLACE so that if a record already exists, it won’t create a duplicate.
+        db.run(
+          `INSERT OR REPLACE INTO schedule (van_id, day, assignment, status) VALUES (?, ?, ?, ?)`,
+          [van.id, dayStr, "", "Blank"],
+          (err) => {
+            if (err) {
+              errors.push(err.message);
+            }
+            recordsInserted++;
+            if (recordsInserted === totalRecords) {
+              if (errors.length > 0) {
+                res.status(500).json({ error: errors.join(", ") });
+              } else {
+                res.json({ message: "Days added successfully." });
+              }
+            }
+          }
+        );
+      }
+    });
+  });
+});
+
 
 // POST /initialize-schedule – initialize the schedule table with blank cells.
 // Expects JSON body: { num_vans: number, num_days: number, start_date: "YYYY-MM-DD" }
