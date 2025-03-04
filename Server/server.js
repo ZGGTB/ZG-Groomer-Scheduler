@@ -19,7 +19,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Secret key for JWT signing (store securely in production)
+// Secret key for JWT signing (store key securely in production) 
 const secretKey = 'your-secret-key';
 
 // Open (or create) the SQLite database file named ZG-Groomer-Scheduler.db in a data folder.
