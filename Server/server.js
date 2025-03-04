@@ -521,6 +521,95 @@ app.put('/schedule', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
+// POST /delete-groomer-schedule-preview
+app.post('/delete-groomer-schedule-preview', authenticateToken, authorizeAdmin, (req, res) => {
+  const { groomer_id, target_date, vans } = req.body;
+  if (!groomer_id || !target_date) {
+    return res.status(400).json({ error: "groomer_id and target_date are required." });
+  }
+  db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!groomer) return res.status(404).json({ error: "Groomer not found." });
+    let vanFilterClause = "";
+    let params = [target_date, groomer.name];
+    if (vans !== "ALL") {
+      const vanArray = vans.split(",");
+      const placeholders = vanArray.map(() => "?").join(",");
+      vanFilterClause = `AND van_id IN (${placeholders})`;
+      params = [target_date, groomer.name, ...vanArray];
+    }
+    const query = `SELECT * FROM schedule WHERE day >= ? AND assignment = ? ${vanFilterClause}`;
+    db.all(query, params, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  });
+});
+
+
+// POST /delete-groomer-schedule
+app.post('/delete-groomer-schedule', authenticateToken, authorizeAdmin, (req, res) => {
+  const { groomer_id, target_date, vans } = req.body;
+  if (!groomer_id || !target_date) {
+    return res.status(400).json({ error: "groomer_id and target_date are required." });
+  }
+  db.get("SELECT * FROM groomers WHERE id = ?", [groomer_id], (err, groomer) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!groomer) return res.status(404).json({ error: "Groomer not found." });
+    let vanFilterClause = "";
+    let params = [target_date, groomer.name];
+    if (vans !== "ALL") {
+      const vanArray = vans.split(",");
+      const placeholders = vanArray.map(() => "?").join(",");
+      vanFilterClause = `AND van_id IN (${placeholders})`;
+      params = [target_date, groomer.name, ...vanArray];
+    }
+    const query = `SELECT * FROM schedule WHERE day >= ? AND assignment = ? ${vanFilterClause}`;
+    db.all(query, params, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({ error: "No matching schedule records found." });
+      }
+      let completed = 0;
+      let errors = [];
+      rows.forEach((row) => {
+        db.run(
+          "DELETE FROM schedule WHERE van_id = ? AND day = ?",
+          [row.van_id, row.day],
+          function (err) {
+            if (err) errors.push(err.message);
+            const timestamp = new Date().toISOString();
+            db.run(
+              `INSERT INTO event_history (cell_id, action, date, timestamp, name, status, note, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                `${row.van_id}-${row.day}`,
+                "deleted",
+                row.day,
+                timestamp,
+                row.assignment,
+                row.status,
+                "Utility: Delete Groomer Schedule",
+                "Utility User",
+              ],
+              function (err2) {
+                if (err2) errors.push(err2.message);
+                completed++;
+                if (completed === rows.length) {
+                  if (errors.length > 0) {
+                    return res.status(500).json({ error: errors.join(", ") });
+                  }
+                  return res.json({ message: `Successfully deleted ${rows.length} schedule records for groomer ${groomer.name}.` });
+                }
+              }
+            );
+          }
+        );
+      });
+    });
+  });
+});
+
+
 // MODELING ENDPOINTS
 app.get('/model-schedule', authenticateToken, authorizeAdmin, (req, res) => {
   db.all("SELECT * FROM model_schedule", [], (err, rows) => {
